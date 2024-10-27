@@ -3,16 +3,23 @@
 import { createClient } from '@/utils/supabase/client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@/app/context/UserContext';
 
 export default function ClientTodoComponent() {
   const [todos, setTodos] = useState<any[] | null>([]);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
+  const { user } = useUser();
 
-  // Fetch todos on mount
   const fetchTodos = async () => {
-    const { data, error } = await supabase.from('todos').select().eq('deleted', false);
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('todos')
+      .select()
+      .eq('deleted', false)
+      .eq('user_id', user.id);
     if (error) {
       setError(error.message);
     } else {
@@ -21,50 +28,56 @@ export default function ClientTodoComponent() {
   };
 
   useEffect(() => {
-    fetchTodos(); // Fetch todos on component mount
-  }, []);
+    fetchTodos();
+  }, [user]);
 
   const addTodo = async (e: React.FormEvent) => {
-    e.preventDefault(); // Prevent form reload
+    e.preventDefault();
+    if (!user) return;
+
     const formData = new FormData(e.target as HTMLFormElement);
     const title = formData.get('title')?.toString();
     const priority = Number(formData.get('priority'));
 
-    if (!title || !title.trim()) return; // Prevent empty todo
+    if (!title || !title.trim()) return;
 
     const { error } = await supabase
       .from('todos')
-      .insert([{ title, priority, updated_at: new Date().toISOString(), deleted: false }]);
+      .insert([{ title, priority, user_id: user.id, updated_at: new Date().toISOString(), deleted: false }]);
     if (error) {
       setError(error.message);
     } else {
-      router.refresh(); // Refresh the page to reload todos from both components
+      router.refresh();
     }
   };
 
   const updateTodo = async (id: number, title: string, priority: number) => {
-    if (!title.trim()) return; // Prevent empty update
+    if (!title.trim() || !user) return;
 
     const { error } = await supabase
       .from('todos')
       .update({ title, priority, updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
     if (error) {
       setError(error.message);
     } else {
-      router.refresh(); // Refresh the page to reload todos from both components
+      router.refresh();
     }
   };
 
   const deleteTodo = async (id: number) => {
+    if (!user) return;
+
     const { error } = await supabase
       .from('todos')
       .update({ deleted: true, updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
     if (error) {
       setError(error.message);
     } else {
-      router.refresh(); // Refresh the page to reload todos from both components
+      router.refresh();
     }
   };
 
@@ -76,7 +89,6 @@ export default function ClientTodoComponent() {
     <div>
       <h1 className="text-2xl mb-4">Client-Side Todos</h1>
 
-      {/* Display todos with edit and delete options */}
       {todos?.map(todo => (
         <div key={todo.id} className="mb-4">
           <input
@@ -105,7 +117,6 @@ export default function ClientTodoComponent() {
         </div>
       ))}
 
-      {/* Form to add new todo - stacked vertically */}
       <form onSubmit={addTodo} className="flex flex-col mt-6">
         <input
           type="text"

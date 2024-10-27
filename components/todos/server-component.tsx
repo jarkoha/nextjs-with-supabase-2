@@ -1,8 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 
-// Server-side action for adding a todo
-export async function addTodo(formData: FormData) {
+export async function addTodo(formData: FormData, user_id: string) {
   'use server';
   const supabase = createClient();
   const title = formData.get('title')?.toString() || '';
@@ -10,7 +9,7 @@ export async function addTodo(formData: FormData) {
 
   if (title.trim()) {
     const { error } = await supabase.from('todos').insert([
-      { title, priority: parseInt(priority), updated_at: new Date().toISOString(), deleted: false }
+      { title, priority: parseInt(priority), user_id, updated_at: new Date().toISOString(), deleted: false }
     ]);
     if (error) {
       throw new Error('Failed to add todo: ' + error.message);
@@ -19,8 +18,7 @@ export async function addTodo(formData: FormData) {
   }
 }
 
-// Server-side action for editing a todo
-export async function editTodo(formData: FormData) {
+export async function editTodo(formData: FormData, user_id: string) {
   'use server';
   const supabase = createClient();
   const id = formData.get('id')?.toString() || '';
@@ -31,7 +29,8 @@ export async function editTodo(formData: FormData) {
     const { error } = await supabase
       .from('todos')
       .update({ title, priority: parseInt(priority), updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user_id);
     if (error) {
       throw new Error('Failed to update todo: ' + error.message);
     }
@@ -39,8 +38,7 @@ export async function editTodo(formData: FormData) {
   }
 }
 
-// Server-side action for soft-deleting a todo
-export async function deleteTodo(formData: FormData) {
+export async function deleteTodo(formData: FormData, user_id: string) {
   'use server';
   const supabase = createClient();
   const id = formData.get('id')?.toString() || '';
@@ -49,7 +47,8 @@ export async function deleteTodo(formData: FormData) {
     const { error } = await supabase
       .from('todos')
       .update({ deleted: true, updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user_id);
     if (error) {
       throw new Error('Failed to delete todo: ' + error.message);
     }
@@ -57,14 +56,14 @@ export async function deleteTodo(formData: FormData) {
   }
 }
 
-export default async function ServerTodoComponent() {
+export default async function ServerTodoComponent({ user_id }: { user_id: string }) {
   const supabase = createClient();
 
-  // Fetch existing todos that are not deleted
   const { data: todos, error } = await supabase
     .from('todos')
     .select('*')
-    .eq('deleted', false);
+    .eq('deleted', false)
+    .eq('user_id', user_id);
 
   if (error) {
     return <h1>Error fetching todos: {error.message}</h1>;
@@ -77,10 +76,9 @@ export default async function ServerTodoComponent() {
       <main className='flex-1 flex flex-col gap-6 px-4'>
         <h1 className="text-2xl mb-4">Server-Side Todos</h1>
 
-        {/* List existing todos */}
         {todos.map(todo => (
           <div key={todo.id} className="mb-4">
-            <form action={editTodo} className="flex flex-col">
+            <form action={(formData) => editTodo(formData, user_id)} className="flex flex-col">
               <input type="hidden" name="id" value={todo.id} />
               <input
                 type="text"
@@ -99,7 +97,7 @@ export default async function ServerTodoComponent() {
                 Update
               </button>
             </form>
-            <form action={deleteTodo} className="mt-2">
+            <form action={(formData) => deleteTodo(formData, user_id)} className="mt-2">
               <input type="hidden" name="id" value={todo.id} />
               <button type="submit" className="bg-red-500 text-white px-4 py-2 rounded w-full">
                 Delete
@@ -109,8 +107,7 @@ export default async function ServerTodoComponent() {
           </div>
         ))}
 
-        {/* Form to add a new todo - stacked vertically */}
-        <form action={addTodo} className="flex flex-col mt-6">
+        <form action={(formData) => addTodo(formData, user_id)} className="flex flex-col mt-6">
           <input type='text' name='title' placeholder='Enter new todo title' required className="border p-2 mb-2 w-full" />
           <select name='priority' defaultValue='1' className="border p-2 mb-2 w-full">
             <option value='1'>1 (Low)</option>
